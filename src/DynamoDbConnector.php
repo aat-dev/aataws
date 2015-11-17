@@ -1,12 +1,12 @@
 <?php
 
-namespace AAT\AWS\DynamoDb;
+namespace AAT\AWS;
 
 use Aws\DynamoDb\DynamoDbClient,
     Aws\DynamoDb\Exception\DynamoDbException,
     Aws\DynamoDb\Marshaler;
 
-class DynamoDb {
+class DynamoDbConnector {
 
   private $client;
   private $marshaler;
@@ -96,13 +96,12 @@ class DynamoDb {
   }
 
   /**
-   * Report errors to Drupal Watchdog.
+   * return errors
    *
    * @param Exception $exception
    */
   private function reportErr(Exception $exception) {
-    watchdog('aat_api', $exception->getMessage());
-    watchdog('aat_api', (string) $exception);
+    return $exception->getMessage();
   }
 
   /**
