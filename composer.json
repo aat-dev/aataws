@@ -1,8 +1,8 @@
 {
-  "name": "aat-dev/aws",
+  "name": "aat-dev/aataws",
   "description": "AAT AWS Integration",
   "license": "MIT",
-  "keywords": ["AWS"],
+  "keywords": ["AWS", "PHP"],
   "require": {
     "aws/aws-sdk-php": "3.*"
   },
