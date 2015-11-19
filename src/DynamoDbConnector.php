@@ -6,6 +6,8 @@ use Aws\DynamoDb\DynamoDbClient,
     Aws\DynamoDb\Exception\DynamoDbException,
     Aws\DynamoDb\Marshaler;
 
+use AAT\AWS\Exception as Exceptions;
+
 class DynamoDbConnector {
 
   private $client;
@@ -14,7 +16,7 @@ class DynamoDbConnector {
   /**
    * Dynamo connector constructor.
    */
-  public function __construct($credentials) {
+  public function __construct($credentials, $handler = NULL) {
     $config = array(
       'region' => $credentials['region'],
       'version' => 'latest',
@@ -23,7 +25,10 @@ class DynamoDbConnector {
         'secret' => $credentials['secret']
       )
     );
-    $this->client = DynamoDbClient::factory($config);
+    if ($handler) {
+      $config['handler'] = $handler;
+    }
+    $this->client = new DynamoDbClient($config);
     $this->marshaler = new Marshaler();
   }
 
@@ -34,12 +39,26 @@ class DynamoDbConnector {
    * @param string $json
    */
   public function createItem($table, $json) {
-    $response = $this->client->putItem(
-      [
-        'TableName' => $table,
-        'Item' => $this->$marshaler->marshalJson($json)
-      ]
-    );
+    try {
+      $response = $this->client->putItem(
+        [
+          'TableName' => $table,
+          'Item' => $this->marshaler->marshalJson($json)
+        ]
+      );
+      $response = $response->toArray();
+      if ($response['@metadata']['statusCode'] == 200) {
+        return TRUE;
+      }
+    } catch (DynamoDbException $e) {
+      if ($e->getAwsErrorType() == 'client') {
+        throw new Exceptions\FatalException($e->getMessage());
+      } else {
+        throw new Exceptions\SystemException($e->getMessage());
+      }
+    }
+
+    return FALSE;
   }
 
   /**
