@@ -85,42 +85,46 @@ class DynamoDbConnector {
       return $this->marshaler->unmarshalItem($response['Item']);
     }
     catch (DynamoDbException $e) {
-      $this->reportErr($e);
+      throw new Exceptions\FatalException($e->getMessage());
     }
-    return FALSE;
   }
 
   /**
-   * Scan a table.
+   * Get items by querying DynamoDb.
    *
    * @param $table
-   * @param $key
-   * @return bool
+   * @param $index
+   * @param $field
+   * @param $value
+   * @throws Exception\FatalException
    */
-  public function scan($table, $key) {
+  public function getItems($table, $index, $field, $value) {
     try {
-      $response = $this->client->scan(
+      $response = $this->client->query(
         [
-          'ConsistentRead' => TRUE,
-          'IndexName' => $key,
-          'TableName' => $table
+          'TableName' => $table,
+          'IndexName' => $index,
+          'KeyConditionExpression' => '#field = :attr',
+          'ExpressionAttributeNames' => ['#field' => $field],
+          'ExpressionAttributeValues' => [
+            ':attr' => [
+              'S' => $value
+              ]
+            ]
         ]
       );
-      return $response['Items'];
+
+      $response = $response->toArray();
+      $items = array();
+      foreach ($response['Items'] as $item) {
+        $items[] = $this->marshaler->unmarshalItem($item);
+      }
+
+      return $items;
     }
     catch (DynamoDbException $e) {
-      $this->reportErr($e);
+      throw new Exceptions\FatalException($e->getMessage());
     }
-    return FALSE;
-  }
-
-  /**
-   * return errors
-   *
-   * @param Exception $exception
-   */
-  private function reportErr(Exception $exception) {
-    return $exception->getMessage();
   }
 
   /**
