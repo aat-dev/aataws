@@ -12,6 +12,7 @@ class DynamoDbConnector {
 
   private $client;
   private $marshaler;
+  private $pagingLimit;
 
   /**
    * Dynamo connector constructor.
@@ -30,6 +31,15 @@ class DynamoDbConnector {
     }
     $this->client = new DynamoDbClient($config);
     $this->marshaler = new Marshaler();
+    $this->pagingLimit = 1;
+  }
+
+  public function setPagingLimit($limit) {
+    $this->pagingLimit = $limit;
+  }
+
+  public function getPagingLimit() {
+    return $this->pagingLimit;
   }
 
   /**
@@ -98,29 +108,37 @@ class DynamoDbConnector {
    * @param $value
    * @throws Exception\FatalException
    */
-  public function getItems($table, $index, $field, $value) {
+  public function getItems($table, $index, $field, $value, $startkey = array()) {
     try {
-      $response = $this->client->query(
-        [
-          'TableName' => $table,
-          'IndexName' => $index,
-          'KeyConditionExpression' => '#field = :attr',
-          'ExpressionAttributeNames' => ['#field' => $field],
-          'ExpressionAttributeValues' => [
-            ':attr' => [
-              'S' => $value
-              ]
-            ]
-        ]
+      $query = array(
+        'TableName' => $table,
+        'IndexName' => $index,
+        'Limit' => $this->pagingLimit,
+        'KeyConditionExpression' => '#field = :attr',
+        'ExpressionAttributeNames' => array(
+          '#field' => $field
+        ),
+        'ExpressionAttributeValues' => array(
+          ':attr' => array(
+            'S' => $value
+          )
+        )
       );
 
-      $response = $response->toArray();
-      $items = array();
-      foreach ($response['Items'] as $item) {
-        $items[] = $this->marshaler->unmarshalItem($item);
+      if (!empty($startkey)) {
+        $query['ExclusiveStartKey'] = $this->marshaler->marshalItem($startkey);
       }
 
-      return $items;
+      $response = $this->client->query($query);
+
+      $response = $response->toArray();
+      if (isset($response['LastEvaluatedKey'])) {
+        $response['LastEvaluatedKey'] = $this->marshaler->unmarshalItem($response['LastEvaluatedKey']);
+      }
+      foreach ($response['Items'] as $key => $item) {
+        $response['Items'][$key] = $this->marshaler->unmarshalItem($item);
+      }
+      return $response;
     }
     catch (DynamoDbException $e) {
       throw new Exceptions\FatalException($e->getMessage());
