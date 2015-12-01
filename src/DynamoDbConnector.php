@@ -31,7 +31,7 @@ class DynamoDbConnector {
     }
     $this->client = new DynamoDbClient($config);
     $this->marshaler = new Marshaler();
-    $this->pagingLimit = 1;
+    $this->pagingLimit = 50;
   }
 
   public function setPagingLimit($limit) {
