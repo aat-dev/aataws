@@ -7,17 +7,19 @@ use Aws\DynamoDb\DynamoDbClient,
     Aws\DynamoDb\Marshaler;
 
 use AAT\AWS\Exception as Exceptions;
+use AAT\AWS\TableDefinition;
 
 class DynamoDbConnector {
 
   private $client;
   private $marshaler;
   private $pagingLimit;
+  private $tableDef;
 
   /**
    * Dynamo connector constructor.
    */
-  public function __construct($credentials, $handler = NULL) {
+  public function __construct($credentials, TableDefinition $tableDefinition, $handler = NULL) {
     $config = array(
       'region' => $credentials['region'],
       'version' => 'latest',
@@ -26,6 +28,7 @@ class DynamoDbConnector {
         'secret' => $credentials['secret']
       )
     );
+    $this->tableDef = $tableDefinition;
     if ($handler) {
       $config['handler'] = $handler;
     }
@@ -48,11 +51,11 @@ class DynamoDbConnector {
    * @param $table
    * @param string $json
    */
-  public function createItem($table, $json) {
+  public function createItem($json) {
     try {
       $response = $this->client->putItem(
         [
-          'TableName' => $table,
+          'TableName' => $this->tableDef->getTableName(),
           'Item' => $this->marshaler->marshalJson($json)
         ]
       );
@@ -79,19 +82,20 @@ class DynamoDbConnector {
    * @param $value
    * @return bool
    */
-  public function getItem($table, $key, $value) {
+  public function getItem($value) {
     try {
-      $response = $this->client->getItem(
-        [
-          'TableName' => $table,
-          'ConsistentRead' => TRUE,
-          'Key' => [
-            $key => [
-              'S' => $value,
-            ]
-          ]
-        ]
+
+      $config = array(
+        'TableName' => $this->tableDef->getTableName(),
+        'ConsistentRead' => TRUE,
+        'Key' => array(
+          $this->tableDef->getPrimaryKey() => array(
+            $this->tableDef->getPrimaryKeyType() => $value
+          )
+        )
       );
+
+      $response = $this->client->getItem($config);
       return $this->marshaler->unmarshalItem($response['Item']);
     }
     catch (DynamoDbException $e) {
@@ -108,22 +112,51 @@ class DynamoDbConnector {
    * @param $value
    * @throws Exception\FatalException
    */
-  public function getItems($table, $index, $field, $value, $startkey = array()) {
+  public function getItems($index, $value, $conditions = array(), $startkey = array()) {
+
     try {
-      $query = array(
-        'TableName' => $table,
-        'IndexName' => $index,
-        'Limit' => $this->pagingLimit,
-        'KeyConditionExpression' => '#field = :attr',
-        'ExpressionAttributeNames' => array(
-          '#field' => $field
-        ),
-        'ExpressionAttributeValues' => array(
-          ':attr' => array(
-            'S' => $value
-          )
+      $index = $this->tableDef->getIndex($index);
+      $expressionAttributeNames = array(
+        '#key_field_placeholder' => $index['key']
+      );
+      $expressionAttributeValues = array(
+        ':key_value_placeholder' => array(
+          $index['type'] => $value
         )
       );
+
+      $query = array(
+        'TableName' => $this->tableDef->getTableName(),
+        'IndexName' => $index['name'],
+        'Limit' => $this->pagingLimit,
+        'KeyConditionExpression' => '#key_field_placeholder = :key_value_placeholder'
+      );
+
+      if (!empty($conditions)) {
+
+        $filterExpressions = array();
+
+        foreach ($conditions as $key => $condition) {
+          $key_placeholder = '#filter_field_placeholder_' . $key;
+          $val_placeholder = ':filter_value_placeholder_' . $key;
+
+          // Set up defaults
+          $comp = isset($condition['comparator']) ? $condition['comparator'] : '=';
+          $dataType = (isset($condition['datatype'])) ? $condition['datatype'] : 'S';
+
+          $filterExpressions[] = $key_placeholder . ' ' . $comp . ' ' . $val_placeholder;
+
+          $expressionAttributeNames[$key_placeholder] = $condition['field'];
+          $expressionAttributeValues[$val_placeholder] = array(
+            $dataType => $condition['value']
+          );
+        }
+
+        $query['FilterExpression'] = implode(' AND ', $filterExpressions);
+      }
+
+      $query['ExpressionAttributeNames'] = $expressionAttributeNames;
+      $query['ExpressionAttributeValues'] = $expressionAttributeValues;
 
       if (!empty($startkey)) {
         $query['ExclusiveStartKey'] = $this->marshaler->marshalItem($startkey);
