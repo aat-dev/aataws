@@ -135,11 +135,12 @@ class DynamoDbConnector {
       if (!empty($conditions)) {
         $filterExpressions = array();
 
-        // Set up defaults
-        $comp = isset($condition['comparator']) ? $condition['comparator'] : '=';
-        $dataType = (isset($condition['datatype'])) ? $condition['datatype'] : 'S';
-
         foreach ($conditions as $key => $condition) {
+
+          // Set up defaults
+          $comp = isset($condition['comparator']) ? $condition['comparator'] : '=';
+          $dataType = (isset($condition['datatype'])) ? $condition['datatype'] : 'S';
+
           $key_placeholder = '#filter_field_placeholder_' . $key;
 
           // Do FIELD IN (VALUE_1, VALUE_2, VALUE_3) queries
