@@ -133,23 +133,36 @@ class DynamoDbConnector {
       );
 
       if (!empty($conditions)) {
-
         $filterExpressions = array();
+
+        // Set up defaults
+        $comp = isset($condition['comparator']) ? $condition['comparator'] : '=';
+        $dataType = (isset($condition['datatype'])) ? $condition['datatype'] : 'S';
 
         foreach ($conditions as $key => $condition) {
           $key_placeholder = '#filter_field_placeholder_' . $key;
-          $val_placeholder = ':filter_value_placeholder_' . $key;
 
-          // Set up defaults
-          $comp = isset($condition['comparator']) ? $condition['comparator'] : '=';
-          $dataType = (isset($condition['datatype'])) ? $condition['datatype'] : 'S';
-
-          $filterExpressions[] = $key_placeholder . ' ' . $comp . ' ' . $val_placeholder;
+          // Do FIELD IN (VALUE_1, VALUE_2, VALUE_3) queries
+          if (is_array($condition['value'])) {
+            $val_placeholders = array();
+            foreach ($condition['value'] as $i => $val) {
+              $val_placeholder = ':filter_value_placeholder_' . $key . '_' . $i;
+              $val_placeholders[] = $val_placeholder;
+              $expressionAttributeValues[$val_placeholder] = array(
+                $dataType => $val
+              );
+            }
+            $filterExpressions[] = $key_placeholder . ' IN (' . implode(', ', $val_placeholders) . ')';
+          }
+          else {
+            $val_placeholder = ':filter_value_placeholder_' . $key;
+            $filterExpressions[] = $key_placeholder . ' ' . $comp . ' ' . $val_placeholder;
+            $expressionAttributeValues[$val_placeholder] = array(
+              $dataType => $condition['value']
+            );
+          }
 
           $expressionAttributeNames[$key_placeholder] = $condition['field'];
-          $expressionAttributeValues[$val_placeholder] = array(
-            $dataType => $condition['value']
-          );
         }
 
         $query['FilterExpression'] = implode(' AND ', $filterExpressions);
