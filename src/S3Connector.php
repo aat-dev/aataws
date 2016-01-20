@@ -8,7 +8,7 @@ use Aws\S3\S3Client;
  * Class S3Connector
  * @package AAT\AWS
  */
-class S3Connector extends AWS {
+class S3Connector {
 
   private $config;
   private $client;
@@ -53,7 +53,7 @@ class S3Connector extends AWS {
    * Delete object
    * @param $bucket
    * @param $key
-   * @return \Aws\Result|\Guzzle\Service\Resource\Model
+   * @return \Aws\Result
    */
   function deleteObject($bucket, $key) {
     $result = $this->client->deleteObject(['Bucket' => $bucket, 'Key' => $key]);
